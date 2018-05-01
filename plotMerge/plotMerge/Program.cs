@@ -95,9 +95,9 @@ namespace plotMerge
             if (System.IO.File.Exists(source))
             {
                 long length = new System.IO.FileInfo(source).Length;
-                if (length != src.nonces * (2<<17))
+                if (length != (long)src.nonces * (2<<17))
                 {
-                    System.Console.WriteLine("ERROR: actual source file size not matching file name implied size!");
+                    System.Console.WriteLine("ERROR: actual source file size not matching file name implied size! "+length.ToString()+" vs. "+(src.nonces * (2 << 17)).ToString());
                     return;
                 }
             }
@@ -112,7 +112,7 @@ namespace plotMerge
             if (System.IO.File.Exists(target))
             {
                 long length = new System.IO.FileInfo(target).Length;
-                if (length != tar.nonces * (2 << 17))
+                if (length != (long)tar.nonces * (2 << 17))
                 {
                     System.Console.WriteLine("ERROR: actual target file size not matching file name implied size!");
                     return;
