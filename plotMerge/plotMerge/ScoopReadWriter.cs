@@ -94,7 +94,7 @@ namespace plotMerge
         {
           
             _fs2.SetLength(totalNonces*(2<<17));
-            bool test = SetFileValidData(_fs.SafeFileHandle, totalNonces * (2 << 17));
+            bool test = SetFileValidData(_fs2.SafeFileHandle, totalNonces * (2 << 17));
             if (!test) Console.WriteLine("INFO: Quick File creation failed. File creation will take a while...");
         }
 	}
