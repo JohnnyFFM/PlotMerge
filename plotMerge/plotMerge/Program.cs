@@ -174,7 +174,7 @@ namespace plotMerge
                 elapsed = DateTime.Now.Subtract(start);
                 togo = TimeSpan.FromTicks(elapsed.Ticks / (y + 1) * (2048 - y - 1));
                 string completed = Math.Round((double)(y + 1) / 2048 * 100).ToString() + "%";
-                string speed1 = Math.Round(((long)src.nonces / 4096 * 2 * (y + 1) / elapsed.TotalMinutes)).ToString() + " nonces/m ";
+                string speed1 = Math.Round(((long)src.nonces / 4096 * 2 * (y + 1) / elapsed.TotalSeconds * 60)).ToString() + " nonces/m ";
                 string speed2 = "("+(Math.Round((double)src.nonces / (2 << 12) * (y + 1) / elapsed.TotalSeconds)).ToString() + "MB/s)";
                 string speed = speed1 + speed2;
                 Console.Write("Completed: " + completed + ", Elapsed: " + timeSpanToString(elapsed) + ", Remaining: " + timeSpanToString(togo) + ", Speed: " + speed + "          \r");
