@@ -12,7 +12,7 @@ namespace plotMerge
             //no arguments provided
             if (args.Length < 2)
             {
-                System.Console.WriteLine("Plotmerge v.0.3");
+                System.Console.WriteLine("Plotmerge v.1.0");
                 System.Console.WriteLine("Syntax: plotMerge source target [memlimit] \n");
                 System.Console.WriteLine("source\t\t Optmized Plot File Source (can be POC1 or POC2)");
                 System.Console.WriteLine("target\t\t Optmized Plot File Target (can be POC1 or POC2)\n");
@@ -91,6 +91,12 @@ namespace plotMerge
             System.Console.WriteLine("INFO: target Plot File: starting Nonce: " + tar.start.ToString() + ", last Nonce: " + (tar.start + tar.nonces - 1).ToString() + ", #nonces: " + tar.nonces.ToString() + ", POC" + (tpoc2 ? "2" : "1"));
             if(shuffle)System.Console.WriteLine("INFO: POC1POC2 Shuffling activated.");
 
+            //check matching ID
+            if (src.id != tar.id)
+            {
+                System.Console.WriteLine("ERROR: numeric ID of source and target file not matching!");
+                return;
+            }
             //check file existance and filesizes
             if (System.IO.File.Exists(source))
             {
@@ -167,12 +173,23 @@ namespace plotMerge
                 //update status
                 elapsed = DateTime.Now.Subtract(start);
                 togo = TimeSpan.FromTicks(elapsed.Ticks / (y + 1) * (2048 - y - 1));
-                Console.Write("Completed: "+Math.Round((double)(y + 1) / 2048 * 100).ToString() + "%"+", Elapsed: " + DateTime.Now.Subtract(start).ToString()+ ", Remaining: " + togo.ToString()+"\r");
-
+                string completed = Math.Round((double)(y + 1) / 2048 * 100).ToString() + "%";
+                string speed1 = Math.Round(((long)src.nonces / 4096 * 2 * (y + 1) / elapsed.TotalMinutes)).ToString() + " nonces/m ";
+                string speed2 = "("+(Math.Round((double)src.nonces / (2 << 12) * (y + 1) / elapsed.TotalSeconds)).ToString() + "MB/s)";
+                string speed = speed1 + speed2;
+                Console.Write("Completed: " + completed + ", Elapsed: " + timeSpanToString(elapsed) + ", Remaining: " + timeSpanToString(togo) + ", Speed: " + speed + "          \r");
             }
             // close reader/writer
             scoopReadWriter.Close();
+        }
 
+        private static string timeSpanToString(TimeSpan timeSpan)
+        {
+            if (timeSpan.ToString().LastIndexOf(".") > -1) {
+                return timeSpan.ToString().Substring(0, timeSpan.ToString().LastIndexOf("."));
+            } else {
+                return timeSpan.ToString();
+            }
         }
 
         private static bool isOptimizedPOC1PlotFileName(string filename)
