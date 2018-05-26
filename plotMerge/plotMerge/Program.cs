@@ -2,17 +2,19 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace plotMerge
 {
     class Program
     {
+        static AutoResetEvent[] autoEvents;
         static void Main(string[] args)
         {
             //no arguments provided
             if (args.Length < 2)
             {
-                System.Console.WriteLine("Plotmerge v.1.0");
+                System.Console.WriteLine("Plotmerge v.1.1");
                 System.Console.WriteLine("Syntax: plotMerge source target [memlimit] \n");
                 System.Console.WriteLine("source\t\t Optmized Plot File Source (can be POC1 or POC2)");
                 System.Console.WriteLine("target\t\t Optmized Plot File Target (can be POC1 or POC2)\n");
@@ -138,49 +140,151 @@ namespace plotMerge
 
             //do it!
             // calc maximum nonces to read (limit)
-            int limit = Convert.ToInt32(memlimit) * 8192;
+            int limit = Convert.ToInt32(memlimit) * 4096; //half the limit for double threadding
 
             //allocate memory
             Scoop scoop1 = new Scoop(Math.Min(src.nonces, limit));  //space needed for one partial scoop
             Scoop scoop2 = new Scoop(Math.Min(src.nonces, limit));  //space needed for one partial scoop
-            
+            Scoop scoop3 = new Scoop(Math.Min(src.nonces, limit));  //space needed for one partial scoop
+            Scoop scoop4 = new Scoop(Math.Min(src.nonces, limit));  //space needed for one partial scoop           
+
             //Create and open Reader/Writer
-            ScoopReadWriter scoopReadWriter;
-            scoopReadWriter = new ScoopReadWriter(source, target);
-            scoopReadWriter.Open();
+            ScoopReadWriter scoopReadWriter1;
+            scoopReadWriter1 = new ScoopReadWriter(source);
+            scoopReadWriter1.OpenR();
+
+            ScoopReadWriter scoopReadWriter2;
+            scoopReadWriter2 = new ScoopReadWriter(target);
+            scoopReadWriter2.OpenW();
 
             //preallocate
-            if(prealloc)scoopReadWriter.PreAlloc(tar.nonces);
+            if (prealloc)scoopReadWriter2.PreAlloc(tar.nonces);
+
+            //create taskPlan
+
 
             //initialise stats
             DateTime start = DateTime.Now;
             TimeSpan elapsed;
             TimeSpan togo;
+            int loops = (int)Math.Ceiling((double)(src.nonces) / limit);
+            TaskInfo[] masterplan = new TaskInfo[2048*loops];
 
-            //loop scoop pairs
+            //create masterplan
             for (int y = 0; y < 2048; y++)
             {
-                //Console.WriteLine("Processing Scoop Pairs " + (y + 1).ToString() + "/2048");
                 //loop partial scoop
                 for (int z = 0; z < src.nonces; z += limit)
                 {
-                    scoopReadWriter.ReadScoop(y, src.nonces, z, scoop1, Math.Min(src.nonces - z, limit));
-                    scoopReadWriter.ReadScoop(4095 - y, src.nonces, z, scoop2, Math.Min(src.nonces - z, limit));
-                    if(shuffle)Poc1poc2shuffle(scoop1, scoop2, Math.Min(src.nonces - z, limit));
-                    scoopReadWriter.WriteScoop(4095 - y, tar.nonces, z + src.start - tar.start, scoop2, Math.Min(src.nonces - z, limit));
-                    scoopReadWriter.WriteScoop(y, tar.nonces, z + src.start - tar.start, scoop1, Math.Min(src.nonces - z, limit));
+                    masterplan[y*loops+z] = new TaskInfo();
+                    masterplan[y * loops + z].reader = scoopReadWriter1;
+                    masterplan[y*loops+z].writer = scoopReadWriter2;
+                    masterplan[y*loops+z].y = y;
+                    masterplan[y*loops+z].z = z;
+                    masterplan[y * loops + z].x = y * loops + z;
+                    masterplan[y*loops+z].limit = limit;
+                    masterplan[y*loops+z].src = src;
+                    masterplan[y*loops+z].tar = tar;
+                    masterplan[y*loops+z].scoop1 = scoop1;
+                    masterplan[y*loops+z].scoop2 = scoop2;
+                    masterplan[y*loops+z].scoop3 = scoop3;
+                    masterplan[y*loops+z].scoop4 = scoop4; 
+                    masterplan[y*loops+z].shuffle = shuffle;
+                    masterplan[y * loops + z].end = masterplan.LongLength;
                 }
+            }
+
+
+
+            //work masterplan
+            //perform first read
+            Th_read(masterplan[0]);
+
+            autoEvents = new AutoResetEvent[]
+{
+                new AutoResetEvent(false),
+                new AutoResetEvent(false)
+};
+            //perform reads and writes parallel
+            ;           for (long x = 1; x < masterplan.LongLength; x++)
+            {
+                ThreadPool.QueueUserWorkItem(new WaitCallback(Th_write), masterplan[x-1]);
+                ThreadPool.QueueUserWorkItem(new WaitCallback(Th_read), masterplan[x]);
+                WaitHandle.WaitAll(autoEvents);
+
                 //update status
                 elapsed = DateTime.Now.Subtract(start);
-                togo = TimeSpan.FromTicks(elapsed.Ticks / (y + 1) * (2048 - y - 1));
-                string completed = Math.Round((double)(y + 1) / 2048 * 100).ToString() + "%";
-                string speed1 = Math.Round((double)src.nonces / 4096 * 2 * (y + 1)*60 / (elapsed.TotalSeconds+1)).ToString() + " nonces/m ";
-                string speed2 = "("+(Math.Round((double)src.nonces / (2 << 12) * (y + 1) / (elapsed.TotalSeconds + 1))).ToString() + "MB/s)";
+                togo = TimeSpan.FromTicks(elapsed.Ticks / (masterplan[x].y + 1) * (2048 - masterplan[x].y - 1));
+                string completed = Math.Round((double)(masterplan[x].y + 1) / 2048 * 100).ToString() + "%";
+                string speed1 = Math.Round((double)src.nonces / 4096 * 2 * (masterplan[x].y + 1) * 60 / (elapsed.TotalSeconds + 1)).ToString() + " nonces/m ";
+                string speed2 = "(" + (Math.Round((double)src.nonces / (2 << 12) * (masterplan[x].y + 1) / (elapsed.TotalSeconds + 1))).ToString() + "MB/s)";
                 string speed = speed1 + speed2;
                 Console.Write("Completed: " + completed + ", Elapsed: " + timeSpanToString(elapsed) + ", Remaining: " + timeSpanToString(togo) + ", Speed: " + speed + "          \r");
             }
+            //perform last write
+            Th_write(masterplan[masterplan.LongLength-1]);
+    
             // close reader/writer
-            scoopReadWriter.Close();
+            scoopReadWriter1.Close();
+            scoopReadWriter2.Close();
+
+        }
+
+        public static void Th_read(object stateInfo)
+        {
+            TaskInfo ti = (TaskInfo)stateInfo;
+
+                //determine cache cycle and front scoop back scoop cycle
+                if (ti.x % 2 == 0)
+                {
+                    ti.reader.ReadScoop(ti.y, ti.src.nonces, ti.z, ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                    ti.reader.ReadScoop(4095 - ti.y, ti.src.nonces, ti.z, ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                    if (ti.shuffle) Poc1poc2shuffle(ti.scoop1, ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                }
+                else
+                {
+                    ti.reader.ReadScoop(4095 - ti.y, ti.src.nonces, ti.z, ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                    ti.reader.ReadScoop(ti.y, ti.src.nonces, ti.z, ti.scoop3, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                    if (ti.shuffle) Poc1poc2shuffle(ti.scoop3, ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                }
+                if (ti.x != 0) autoEvents[0].Set();
+
+        }
+
+        public static void Th_write(object stateInfo)
+        {
+            TaskInfo ti = (TaskInfo)stateInfo;
+            if (ti.x % 2 == 0)
+                {
+                    ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit)); autoEvents[1].Set();
+                    ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
+
+                }
+                else
+                {
+                    ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                    ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop3, Math.Min(ti.src.nonces - ti.z, ti.limit)); 
+                }
+
+            autoEvents[1].Set();
+        }
+
+        struct TaskInfo
+        {
+            public ScoopReadWriter reader;
+            public ScoopReadWriter writer;
+            public int y;
+            public int z;
+            public int x;
+            public int limit;
+            public plotfile src;
+            public plotfile tar;
+            public Scoop scoop1;
+            public Scoop scoop2;
+            public Scoop scoop3;
+            public Scoop scoop4;
+            public bool shuffle;
+            public long end;
         }
 
         private static string timeSpanToString(TimeSpan timeSpan)

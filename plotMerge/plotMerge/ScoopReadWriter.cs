@@ -13,63 +13,37 @@ namespace plotMerge
 	{
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool SetFileValidData(SafeFileHandle hFile, long ValidDataLength);
-        private BinaryReader _br; 
-		protected string _sFileName;
-        protected string _tFileName;
+		protected string _FileName;
         private long _lLength = -1;
 		protected bool _bOpen = false;
         protected FileStream _fs;
-        protected FileStream _fs2;
-        bool _inline;
         private long _lPosition = 0;
+        FileOptions FileFlagNoBuffering = (FileOptions)0x20000000;
 
         //inline constructor
         public ScoopReadWriter(string stFileName)
 		{
-			_sFileName = stFileName;
-            _tFileName = stFileName;
-            _inline = true;
+			_FileName = stFileName;
         }
 
-        //separate file constructor
-        public ScoopReadWriter(string sFileName, string tFileName)
-        {
-            _sFileName = sFileName;
-            _tFileName = tFileName;
-            _inline = false;
-        }
         public void Close()
 		{
 			_bOpen = false;
-			if (!_inline) _br.Close();
-            _fs2.Close();
-			_br = null;
+            _fs.Close();
 		}
 
-		public bool EOF
-		{
-			get
-			{	
-					return (!_bOpen || (_lPosition >= _lLength));
-			}
-		}
-
-        public void Open()
+        public void OpenR()
         {
-            if (_inline)
-            {
-                _fs2 = new FileStream(_sFileName, FileMode.Open, FileAccess.ReadWrite, FileShare.None,1048576,FileOptions.SequentialScan|FileOptions.WriteThrough);
-                _br = new BinaryReader(_fs2);
-            }
-            else
-            {
-                //assert priviliges
-                if (!Privileges.HasAdminPrivileges) Console.WriteLine("INFO: Missing Priviledge, File creation will take a while...");
-                _fs = new FileStream(_sFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 1048576, FileOptions.SequentialScan);
-                _fs2 = new FileStream(_tFileName, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 1048576, FileOptions.WriteThrough);
-                _br = new BinaryReader(_fs);
-            }
-            _lLength = _br.BaseStream.Length;
+            _fs = new FileStream(_FileName, FileMode.Open, FileAccess.Read, FileShare.Read, 1048576, FileFlagNoBuffering);
+            _lPosition = 0;
+            _bOpen = true;
+        }
+
+        public void OpenW()
+        {
+            //assert priviliges
+            if (!Privileges.HasAdminPrivileges) Console.WriteLine("INFO: Missing Priviledge, File creation will take a while...");
+            _fs = new FileStream(_FileName, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 1048576, FileFlagNoBuffering);
             _lPosition = 0;
             _bOpen = true;
         }
@@ -77,24 +51,23 @@ namespace plotMerge
         public void ReadScoop(int scoop, long totalNonces, long startNonce, Scoop target, int limit)
 		{
             _lPosition = scoop * (64 * totalNonces) + startNonce * 64;
-            _br.BaseStream.Seek(_lPosition, SeekOrigin.Begin);
-            _br.BaseStream.Read(target.byteArrayField, 0, limit * 64);
+            _fs.Seek(_lPosition, SeekOrigin.Begin);
+            _fs.Read(target.byteArrayField, 0, limit * 64);
             _lPosition += limit * 64;
         }
 
         public void WriteScoop(int scoop, long totalNonces, long startNonce, Scoop source, int limit)
         {
             _lPosition = scoop * (64 * totalNonces) + startNonce * 64;
-            _fs2.Seek(_lPosition, SeekOrigin.Begin);
-            _fs2.Write(source.byteArrayField, 0, limit * 64);
+            _fs.Seek(_lPosition, SeekOrigin.Begin);
+            _fs.Write(source.byteArrayField, 0, limit * 64);
             _lPosition += limit * 64;
         }
 
         public void PreAlloc(long totalNonces)
         {
-          
-            _fs2.SetLength(totalNonces*(2<<17));
-            bool test = SetFileValidData(_fs2.SafeFileHandle, totalNonces * (2 << 17));
+            _fs.SetLength(totalNonces*(2<<17));
+            bool test = SetFileValidData(_fs.SafeFileHandle, totalNonces * (2 << 17));
             if (!test) Console.WriteLine("INFO: Quick File creation failed. File creation will take a while...");
         }
 	}
