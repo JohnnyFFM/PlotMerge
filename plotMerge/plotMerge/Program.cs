@@ -256,7 +256,7 @@ namespace plotMerge
             TaskInfo ti = (TaskInfo)stateInfo;
             if (ti.x % 2 == 0)
                 {
-                    ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit)); autoEvents[1].Set();
+                    ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit)); 
                     ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
 
                 }
