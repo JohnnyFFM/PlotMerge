@@ -45,6 +45,7 @@ namespace plotMerge
             if (!Privileges.HasAdminPrivileges) Console.WriteLine("INFO: Missing Priviledge, File creation will take a while...");
             _fs = new FileStream(_FileName, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 1048576, FileFlagNoBuffering);
             _lPosition = 0;
+            _lLength = _fs.Length;
             _bOpen = true;
         }
 

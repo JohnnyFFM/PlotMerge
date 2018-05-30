@@ -201,12 +201,12 @@ namespace plotMerge
             Th_read(masterplan[0]);
 
             autoEvents = new AutoResetEvent[]
-{
+            {
                 new AutoResetEvent(false),
                 new AutoResetEvent(false)
-};
+            };
             //perform reads and writes parallel
-            ;           for (long x = 1; x < masterplan.LongLength; x++)
+            for (long x = 1; x < masterplan.LongLength; x++)
             {
                 ThreadPool.QueueUserWorkItem(new WaitCallback(Th_write), masterplan[x-1]);
                 ThreadPool.QueueUserWorkItem(new WaitCallback(Th_read), masterplan[x]);
@@ -227,14 +227,13 @@ namespace plotMerge
             // close reader/writer
             scoopReadWriter1.Close();
             scoopReadWriter2.Close();
-
         }
 
         public static void Th_read(object stateInfo)
         {
             TaskInfo ti = (TaskInfo)stateInfo;
 
-                //determine cache cycle and front scoop back scoop cycle
+                //determine cache cycle and front scoop back scoop cycle to alternate
                 if (ti.x % 2 == 0)
                 {
                     ti.reader.ReadScoop(ti.y, ti.src.nonces, ti.z, ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit));
@@ -258,15 +257,15 @@ namespace plotMerge
                 {
                     ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit)); 
                     ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
-
                 }
                 else
                 {
                     ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
                     ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop3, Math.Min(ti.src.nonces - ti.z, ti.limit)); 
                 }
-
-            autoEvents[1].Set();
+            //Thread.Sleep(2000);
+            if (ti.x != (ti.end -1))
+                autoEvents[1].Set();
         }
 
         struct TaskInfo
