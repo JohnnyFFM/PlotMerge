@@ -14,7 +14,7 @@ namespace plotMerge
             //no arguments provided
             if (args.Length < 2)
             {
-                System.Console.WriteLine("Plotmerge v.1.2");
+                System.Console.WriteLine("Plotmerge v.1.3");
                 System.Console.WriteLine("Syntax: plotMerge source target [memlimit] \n");
                 System.Console.WriteLine("source\t\t Optmized Plot File Source (can be POC1 or POC2)");
                 System.Console.WriteLine("target\t\t Optmized Plot File Target (can be POC1 or POC2)\n");
