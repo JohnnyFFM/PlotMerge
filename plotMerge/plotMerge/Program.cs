@@ -178,11 +178,11 @@ namespace plotMerge
                 for (int z = 0; z < src.nonces; z += limit)
                 {
                     masterplan[y*loops+zz] = new TaskInfo();
-                    masterplan[y * loops + zz].reader = scoopReadWriter1;
+                    masterplan[y*loops+zz].reader = scoopReadWriter1;
                     masterplan[y*loops+zz].writer = scoopReadWriter2;
                     masterplan[y*loops+zz].y = y;
                     masterplan[y*loops+zz].z = z;
-                    masterplan[y * loops + zz].x = y * loops + z;
+                    masterplan[y*loops+zz].x = y * loops + zz;
                     masterplan[y*loops+zz].limit = limit;
                     masterplan[y*loops+zz].src = src;
                     masterplan[y*loops+zz].tar = tar;
@@ -191,7 +191,7 @@ namespace plotMerge
                     masterplan[y*loops+zz].scoop3 = scoop3;
                     masterplan[y*loops+zz].scoop4 = scoop4; 
                     masterplan[y*loops+zz].shuffle = shuffle;
-                    masterplan[y * loops + zz].end = masterplan.LongLength;
+                    masterplan[y*loops + zz].end = masterplan.LongLength;
                     zz += 1;
                 }
             }
