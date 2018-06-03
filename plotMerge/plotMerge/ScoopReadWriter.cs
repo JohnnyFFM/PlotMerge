@@ -43,7 +43,7 @@ namespace plotMerge
         {
             //assert priviliges
             if (!Privileges.HasAdminPrivileges) Console.WriteLine("INFO: Missing Priviledge, File creation will take a while...");
-            _fs = new FileStream(_FileName, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 1048576, FileFlagNoBuffering);
+            _fs = new FileStream(_FileName, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 1048576, FileOptions.WriteThrough);
             _lPosition = 0;
             _lLength = _fs.Length;
             _bOpen = true;
@@ -61,7 +61,15 @@ namespace plotMerge
         {
             _lPosition = scoop * (64 * totalNonces) + startNonce * 64;
             _fs.Seek(_lPosition, SeekOrigin.Begin);
-            _fs.Write(source.byteArrayField, 0, limit * 64);
+            try
+            {
+                _fs.Write(source.byteArrayField, 0, limit * 64);
+            }
+            catch (IOException e)
+            {
+                Console.WriteLine("ERR:" + e.Message);
+                _fs.Close();
+            }
             _lPosition += limit * 64;
         }
 

@@ -9,8 +9,12 @@ namespace plotMerge
     class Program
     {
         static AutoResetEvent[] autoEvents;
+        static ScoopReadWriter scoopReadWriter1;
+        static ScoopReadWriter scoopReadWriter2;
+
         static void Main(string[] args)
         {
+            AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
             //no arguments provided
             if (args.Length < 2)
             {
@@ -149,11 +153,9 @@ namespace plotMerge
             Scoop scoop4 = new Scoop(Math.Min(src.nonces, limit));  //space needed for one partial scoop           
 
             //Create and open Reader/Writer
-            ScoopReadWriter scoopReadWriter1;
             scoopReadWriter1 = new ScoopReadWriter(source);
             scoopReadWriter1.OpenR();
 
-            ScoopReadWriter scoopReadWriter2;
             scoopReadWriter2 = new ScoopReadWriter(target);
             scoopReadWriter2.OpenW();
 
@@ -170,11 +172,11 @@ namespace plotMerge
             int loops = (int)Math.Ceiling((double)(src.nonces) / limit);
             TaskInfo[] masterplan = new TaskInfo[2048*loops];
 
-            //create masterplan
+            //create masterplan     
             for (int y = 0; y < 2048; y++)
             {
-                //loop partial scoop
                 int zz = 0;
+                //loop partial scoop               
                 for (int z = 0; z < src.nonces; z += limit)
                 {
                     masterplan[y*loops+zz] = new TaskInfo();
@@ -182,7 +184,7 @@ namespace plotMerge
                     masterplan[y*loops+zz].writer = scoopReadWriter2;
                     masterplan[y*loops+zz].y = y;
                     masterplan[y*loops+zz].z = z;
-                    masterplan[y*loops+zz].x = y * loops + zz;
+                    masterplan[y*loops+zz].x = y*loops+zz;
                     masterplan[y*loops+zz].limit = limit;
                     masterplan[y*loops+zz].src = src;
                     masterplan[y*loops+zz].tar = tar;
@@ -191,12 +193,10 @@ namespace plotMerge
                     masterplan[y*loops+zz].scoop3 = scoop3;
                     masterplan[y*loops+zz].scoop4 = scoop4; 
                     masterplan[y*loops+zz].shuffle = shuffle;
-                    masterplan[y*loops + zz].end = masterplan.LongLength;
+                    masterplan[y*loops+zz].end = masterplan.LongLength;
                     zz += 1;
                 }
             }
-
-
 
             //work masterplan
             //perform first read
@@ -229,6 +229,7 @@ namespace plotMerge
             // close reader/writer
             scoopReadWriter1.Close();
             scoopReadWriter2.Close();
+            Console.Write("File closed!");
         }
 
         public static void Th_read(object stateInfo)
@@ -265,9 +266,14 @@ namespace plotMerge
                     ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
                     ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + ti.src.start - ti.tar.start, ti.scoop3, Math.Min(ti.src.nonces - ti.z, ti.limit)); 
                 }
-            //Thread.Sleep(2000);
-            if (ti.x != (ti.end -1))
+            if (ti.x != (ti.end - 1))
+            {
                 autoEvents[1].Set();
+            }
+            else
+            {
+                Console.Write("All done!");
+            }
         }
 
         struct TaskInfo
@@ -352,5 +358,14 @@ namespace plotMerge
             public int nonces;
             public int stagger;
         }
+
+        static void CurrentDomain_ProcessExit(object sender, EventArgs e)
+        {
+            //Cleanup
+            if (scoopReadWriter1 != null) scoopReadWriter1.Close();
+            if (scoopReadWriter2 != null) scoopReadWriter2.Close();
+            Console.WriteLine("End.");
+        }
+
     }
 }
