@@ -32,54 +32,144 @@ namespace plotMerge
             _fs.Close();
 		}
 
-        public void OpenR()
+        //Opens Source File for reading
+        //directIO: true to use direct i/o
+        //returns true on success
+        public Boolean OpenR(bool directIO)
         {
-            _fs = new FileStream(_FileName, FileMode.Open, FileAccess.Read, FileShare.Read, 1048576, FileFlagNoBuffering);
+            try
+            {
+                if (directIO)
+                {
+                    _fs = new FileStream(_FileName, FileMode.Open, FileAccess.Read, FileShare.Read, 1048576, FileFlagNoBuffering);
+                }
+                else
+                {
+                    _fs = new FileStream(_FileName, FileMode.Open, FileAccess.Read, FileShare.Read, 1048576, FileOptions.SequentialScan);
+                }
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine("ERR: Error Opening File: "+ e.Message);
+                if (_fs != null) _fs.Close();
+                return false;
+            }
             _lPosition = 0;
             _bOpen = true;
+            return true;
         }
 
-        public void OpenW()
+        //Opens Target File for writing
+        //directIO: true to use direct i/o
+        //returns true on success
+        public Boolean OpenW(bool directIO)
         {
-            //assert priviliges
-            if (!Privileges.HasAdminPrivileges) Console.WriteLine("INFO: Missing Priviledge, File creation will take a while...");
-            _fs = new FileStream(_FileName, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 1048576, FileOptions.WriteThrough);
+            try
+            {
+                //assert privileges
+                if (!Privileges.HasAdminPrivileges)
+                {
+                    Console.Error.WriteLine("ERR: Error asserting required privilege. No elevated file creation possible.");
+                    return false;
+                }
+                if (directIO)
+                {
+                    _fs = new FileStream(_FileName, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 1048576, FileFlagNoBuffering);
+                }
+                else
+                {
+                    _fs = new FileStream(_FileName, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 1048576, FileOptions.WriteThrough);
+                }
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine("ERR: Error Opening File: " + e.Message);
+                if (_fs != null) _fs.Close();
+                return false;
+            }
             _lPosition = 0;
             _lLength = _fs.Length;
             _bOpen = true;
+            return true;
         }
 
-        public void ReadScoop(int scoop, long totalNonces, long startNonce, Scoop target, int limit)
+        //Reads a scoop from startNonce to limit 
+        public Boolean ReadScoop(int scoop, int totalNonces, long startNonce, Scoop target, int limit)
 		{
             _lPosition = scoop * (64 * totalNonces) + startNonce * 64;
-            _fs.Seek(_lPosition, SeekOrigin.Begin);
-            _fs.Read(target.byteArrayField, 0, limit * 64);
-            _lPosition += limit * 64;
-        }
-
-        public void WriteScoop(int scoop, long totalNonces, long startNonce, Scoop source, int limit)
-        {
-            _lPosition = scoop * (64 * totalNonces) + startNonce * 64;
-            _fs.Seek(_lPosition, SeekOrigin.Begin);
             try
             {
-                _fs.Write(source.byteArrayField, 0, limit * 64);
+                _fs.Seek(_lPosition, SeekOrigin.Begin);
             }
-            catch (IOException e)
+            catch (Exception e)
             {
-                Console.WriteLine("ERR:" + e.Message);
-                _fs.Close();
+                Console.Error.WriteLine("ERR: I/O Error - Seek to read failed: Scoop: " + scoop.ToString() + " " + e.Message);
+                return false;
+            }
+            try
+            {
+                //limit reads to 1MB to avoid interrupts 64*16384
+                for (int i = 0; i < limit * 64; i += (64 * 16384))
+                    _fs.Read(target.byteArrayField, i, Math.Min(64 * 16384, limit * 64 - i));
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine("ERR: I/O Error - Read failed: Scoop: " + e.Message);
+                return false;
             }
             _lPosition += limit * 64;
+            return true;
         }
 
-        public void PreAlloc(long totalNonces)
+        //Writes a scoop from startNonce to limit 
+        public Boolean WriteScoop(int scoop, long totalNonces, long startNonce, Scoop source, int limit)
+        {
+            _lPosition = scoop * (64 * totalNonces) + startNonce * 64;
+            try
+            {
+                _fs.Seek(_lPosition, SeekOrigin.Begin);
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine("ERR: I/O Error - Seek to write failed: Scoop: " + scoop.ToString() + " " + e.Message);
+                return false;
+            }
+            try
+            {
+                //interrupt avoider 1mb read 64*16384
+                for (int i = 0; i < limit * 64; i += (64 * 16384))
+                    _fs.Write(source.byteArrayField, i, Math.Min(64 * 16384, limit * 64 - i));
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine("ERR: I/O Error - Write failed: Scoop: " + e.Message);
+                return false;
+            }
+            _lPosition += limit * 64;
+            return true;
+        }
+
+        //returns true if files are openend
+        public Boolean isOpen()
+        {
+            return _bOpen;
+        }
+
+        //preAllocate disk space and allow for fast file creation
+        public Boolean PreAlloc(long totalNonces)
         {
             _fs.SetLength(totalNonces*(2<<17));
             bool test = SetFileValidData(_fs.SafeFileHandle, totalNonces * (2 << 17));
-            if (!test) Console.WriteLine("INFO: Quick File creation failed. File creation will take a while...");
+            if (!test) 
+            {
+                Console.Error.WriteLine("ERR: Quick File creation failed.");
+                return false;
+            }
+            return true;
         }
 	}
+
+
     public static class Privileges
     {
         private static int asserted = 0;
