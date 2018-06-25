@@ -14,7 +14,8 @@ namespace plotMerge
         static ScoopReadWriter scoopReadWriter1;
         static ScoopReadWriter scoopReadWriter2;
         static Boolean ddio = false;
-        static Boolean halt = false;
+        static Boolean halt1 = false;
+        static Boolean halt2 = false;
 
         [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Auto)]
         public static extern int GetDiskFreeSpace(string lpRootPathName, out int lpSectorsPerCluster, out int lpBytesPerSector, out int lpNumberOfFreeClusters, out int lpTotalNumberOfClusters);
@@ -244,7 +245,7 @@ namespace plotMerge
                 ThreadPool.QueueUserWorkItem(new WaitCallback(Th_write), masterplan[x-1]);
                 ThreadPool.QueueUserWorkItem(new WaitCallback(Th_read), masterplan[x]);
                 WaitHandle.WaitAll(autoEvents);
-                if (halt)
+                if (halt1 || halt2)
                 {
                     Console.Error.WriteLine("ERR: Shutting down!");
                     return;
@@ -260,8 +261,8 @@ namespace plotMerge
                 Console.Write("Completed: " + completed + ", Elapsed: " + TimeSpanToString(elapsed) + ", Remaining: " + TimeSpanToString(togo) + ", Speed: " + speed + "          \r");
             }
             //perform last write
-            if (!halt) Th_write(masterplan[masterplan.LongLength-1]);
-            if (halt)
+            if (!halt1 && !halt2) Th_write(masterplan[masterplan.LongLength-1]);
+            if (halt1 || halt2)
             {
                 Console.Error.WriteLine("ERR: Shutting down!");
                 return;
@@ -280,14 +281,14 @@ namespace plotMerge
                 //determine cache cycle and front scoop back scoop cycle to alternate
                 if (ti.x % 2 == 0)
                 {
-                if (!halt) halt = halt || !ti.reader.ReadScoop(ti.y, ti.src.nonces, ti.z, ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit));
-                if (!halt) halt = halt || !ti.reader.ReadScoop(4095 - ti.y, ti.src.nonces, ti.z, ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                if (!halt1) halt1 = halt1 || !ti.reader.ReadScoop(ti.y, ti.src.nonces, ti.z, ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                if (!halt1) halt1 = halt1 || !ti.reader.ReadScoop(4095 - ti.y, ti.src.nonces, ti.z, ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
                     if (ti.shuffle) Poc1poc2shuffle(ti.scoop1, ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
                 }
                 else
                 {
-                if (!halt) halt = halt || !ti.reader.ReadScoop(4095 - ti.y, ti.src.nonces, ti.z, ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
-                if (!halt) halt = halt || !ti.reader.ReadScoop(ti.y, ti.src.nonces, ti.z, ti.scoop3, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                if (!halt1) halt1 = halt1 || !ti.reader.ReadScoop(4095 - ti.y, ti.src.nonces, ti.z, ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                if (!halt1) halt1 = halt1 || !ti.reader.ReadScoop(ti.y, ti.src.nonces, ti.z, ti.scoop3, Math.Min(ti.src.nonces - ti.z, ti.limit));
                     if (ti.shuffle) Poc1poc2shuffle(ti.scoop3, ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
                 }
                 if (ti.x != 0) autoEvents[0].Set();
@@ -298,13 +299,13 @@ namespace plotMerge
             TaskInfo ti = (TaskInfo)stateInfo;
             if (ti.x % 2 == 0)
                 {
-                    if (!halt) halt = halt || !ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit));
-                    if (!halt) halt = halt || !ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                    if (!halt2) halt2 = halt2 || !ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                    if (!halt2) halt2 = halt2 || !ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
                 }
                 else
                 {
-                    if (!halt) halt = halt || !ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
-                    if (!halt) halt = halt || !ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop3, Math.Min(ti.src.nonces - ti.z, ti.limit)); 
+                    if (!halt2) halt2 = halt2 || !ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                    if (!halt2) halt2 = halt2 || !ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop3, Math.Min(ti.src.nonces - ti.z, ti.limit)); 
                 }
             if (ti.x != (ti.end - 1))
             {

@@ -94,7 +94,7 @@ namespace plotMerge
         }
 
         //Reads a scoop from startNonce to limit 
-        public Boolean ReadScoop(int scoop, int totalNonces, long startNonce, Scoop target, int limit)
+        public Boolean ReadScoop(int scoop, long totalNonces, long startNonce, Scoop target, int limit)
 		{
             _lPosition = scoop * (64 * totalNonces) + startNonce * 64;
             try
