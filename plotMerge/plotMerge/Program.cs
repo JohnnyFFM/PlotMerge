@@ -155,11 +155,24 @@ namespace plotMerge
             // calc maximum nonces to read (limit)
             int limit = Convert.ToInt32(memlimit) * 4096;
 
+            //calc boost
+            decimal localmem;
+            int boostmulti = 1;
+            localmem = Math.Min(memlimit, Math.Ceiling((decimal)src.nonces / (2 << 11)));
+
+                for (int x = 0; localmem * (2 << x) < (memlimit); x++)
+                {
+                    {
+                        boostmulti = (2 << x);
+                    }
+                }
+            System.Console.WriteLine("INFO: Memory used: " + (src.nonces * boostmulti/4096).ToString());
+
             //allocate memory
-            Scoop scoop1 = new Scoop(Math.Min(src.nonces, limit));  //space needed for one partial scoop
-            Scoop scoop2 = new Scoop(Math.Min(src.nonces, limit));  //space needed for one partial scoop
-            Scoop scoop3 = new Scoop(Math.Min(src.nonces, limit));  //space needed for one partial scoop
-            Scoop scoop4 = new Scoop(Math.Min(src.nonces, limit));  //space needed for one partial scoop           
+            Scoop scoop1 = new Scoop(Math.Min(src.nonces * boostmulti, limit));  //space needed for one partial scoop
+            Scoop scoop2 = new Scoop(Math.Min(src.nonces * boostmulti, limit));  //space needed for one partial scoop
+            Scoop scoop3 = new Scoop(Math.Min(src.nonces * boostmulti, limit));  //space needed for one partial scoop
+            Scoop scoop4 = new Scoop(Math.Min(src.nonces * boostmulti, limit));  //space needed for one partial scoop           
 
             //check if sectors and nonces are aligned for easy direct I/O
             Boolean dio = true; 
@@ -202,28 +215,29 @@ namespace plotMerge
 
             //create masterplan     
             int loops = (int)Math.Ceiling((double)(src.nonces) / limit);
-            TaskInfo[] masterplan = new TaskInfo[2048*loops];
-            for (int y = 0; y < 2048; y++)
+            TaskInfo[] masterplan = new TaskInfo[2048*loops/boostmulti];
+            for (int y = 0; y < 2048; y+=boostmulti)
             {
                 int zz = 0;
                 //loop partial scoop               
                 for (int z = 0; z < src.nonces; z += limit)
                 {
-                    masterplan[y*loops+zz] = new TaskInfo();
-                    masterplan[y*loops+zz].reader = scoopReadWriter1;
-                    masterplan[y*loops+zz].writer = scoopReadWriter2;
-                    masterplan[y*loops+zz].y = y;
-                    masterplan[y*loops+zz].z = z;
-                    masterplan[y*loops+zz].x = y*loops+zz;
-                    masterplan[y*loops+zz].limit = limit;
-                    masterplan[y*loops+zz].src = src;
-                    masterplan[y*loops+zz].tar = tar;
-                    masterplan[y*loops+zz].scoop1 = scoop1;
-                    masterplan[y*loops+zz].scoop2 = scoop2;
-                    masterplan[y*loops+zz].scoop3 = scoop3;
-                    masterplan[y*loops+zz].scoop4 = scoop4; 
-                    masterplan[y*loops+zz].shuffle = shuffle;
-                    masterplan[y*loops+zz].end = masterplan.LongLength;
+                    masterplan[y / boostmulti * loops+zz] = new TaskInfo();
+                    masterplan[y / boostmulti * loops+zz].reader = scoopReadWriter1;
+                    masterplan[y / boostmulti * loops+zz].writer = scoopReadWriter2;
+                    masterplan[y / boostmulti * loops+zz].y = y;
+                    masterplan[y / boostmulti * loops+zz].z = z;
+                    masterplan[y / boostmulti * loops+zz].x = y / boostmulti * loops+zz;
+                    masterplan[y / boostmulti * loops+zz].limit = limit;
+                    masterplan[y / boostmulti * loops+zz].src = src;
+                    masterplan[y / boostmulti * loops+zz].tar = tar;
+                    masterplan[y / boostmulti * loops+zz].scoop1 = scoop1;
+                    masterplan[y / boostmulti * loops+zz].scoop2 = scoop2;
+                    masterplan[y / boostmulti * loops+zz].scoop3 = scoop3;
+                    masterplan[y / boostmulti * loops+zz].scoop4 = scoop4; 
+                    masterplan[y / boostmulti * loops+zz].shuffle = shuffle;
+                    masterplan[y / boostmulti * loops+zz].boostmulti = boostmulti;
+                    masterplan[y / boostmulti * loops+zz].end = masterplan.LongLength;
                     zz += 1;
                 }
             }
@@ -252,10 +266,10 @@ namespace plotMerge
 
                 //update status
                 elapsed = DateTime.Now.Subtract(start);
-                togo = TimeSpan.FromTicks(elapsed.Ticks / (masterplan[x].y + 1) * (2048 - masterplan[x].y - 1));
-                string completed = Math.Round((double)(masterplan[x].y + 1) / 2048 * 100).ToString() + "%";
-                string speed1 = Math.Round((double)src.nonces / 4096 * 2 * (masterplan[x].y + 1) * 60 / (elapsed.TotalSeconds + 1)).ToString() + " nonces/m ";
-                string speed2 = "(" + (Math.Round((double)src.nonces / (2 << 12) * (masterplan[x].y + 1) / (elapsed.TotalSeconds + 1))).ToString() + "MB/s)";
+                togo = TimeSpan.FromTicks(elapsed.Ticks / (masterplan[x].y + (boostmulti - 1) + 1) * (2048 - masterplan[x].y - (boostmulti - 1) - 1));
+                string completed = Math.Round((double)(masterplan[x].y + (boostmulti - 1) + 1) / 2048 * 100).ToString() + "%";
+                string speed1 = Math.Round((double)src.nonces / 4096 * 2 * (masterplan[x].y+ (boostmulti - 1) + 1) * 60 / (elapsed.TotalSeconds + 1)).ToString() + " nonces/m ";
+                string speed2 = "(" + (Math.Round((double)src.nonces / (2 << 12) * (masterplan[x].y + (boostmulti - 1) + 1) / (elapsed.TotalSeconds + 1))).ToString() + "MB/s)";
                 string speed = speed1 + speed2;
                 Console.Write("Completed: " + completed + ", Elapsed: " + TimeSpanToString(elapsed) + ", Remaining: " + TimeSpanToString(togo) + ", Speed: " + speed + "          \r");
             }
@@ -280,15 +294,15 @@ namespace plotMerge
                 //determine cache cycle and front scoop back scoop cycle to alternate
                 if (ti.x % 2 == 0)
                 {
-                if (!halt) halt = halt || !ti.reader.ReadScoop(ti.y, ti.src.nonces, ti.z, ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit));
-                if (!halt) halt = halt || !ti.reader.ReadScoop(4095 - ti.y, ti.src.nonces, ti.z, ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
-                    if (ti.shuffle) Poc1poc2shuffle(ti.scoop1, ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                if (!halt) halt = halt || !ti.reader.ReadScoop(ti.y, ti.src.nonces, ti.z, ti.scoop1, Math.Min(ti.src.nonces * ti.boostmulti - ti.z, ti.limit));
+                if (!halt) halt = halt || !ti.reader.ReadScoop(4095 - ti.y-(ti.boostmulti-1), ti.src.nonces, ti.z, ti.scoop2, Math.Min(ti.src.nonces * ti.boostmulti - ti.z, ti.limit));
+                    if (ti.shuffle) Poc1poc2shuffleBoost(ti.scoop1, ti.scoop2, (int)ti.src.nonces, Math.Min(ti.src.nonces * ti.boostmulti - ti.z, ti.limit));
                 }
                 else
                 {
-                if (!halt) halt = halt || !ti.reader.ReadScoop(4095 - ti.y, ti.src.nonces, ti.z, ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
-                if (!halt) halt = halt || !ti.reader.ReadScoop(ti.y, ti.src.nonces, ti.z, ti.scoop3, Math.Min(ti.src.nonces - ti.z, ti.limit));
-                    if (ti.shuffle) Poc1poc2shuffle(ti.scoop3, ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                if (!halt) halt = halt || !ti.reader.ReadScoop(4095 - ti.y - (ti.boostmulti - 1), ti.src.nonces, ti.z, ti.scoop4, Math.Min(ti.src.nonces * ti.boostmulti - ti.z, ti.limit));
+                if (!halt) halt = halt || !ti.reader.ReadScoop(ti.y, ti.src.nonces, ti.z, ti.scoop3, Math.Min(ti.src.nonces * ti.boostmulti - ti.z, ti.limit));
+                    if (ti.shuffle) Poc1poc2shuffleBoost(ti.scoop3, ti.scoop4, (int)ti.src.nonces, Math.Min(ti.src.nonces * ti.boostmulti - ti.z, ti.limit));
                 }
                 if (ti.x != 0) autoEvents[0].Set();
         }
@@ -298,13 +312,13 @@ namespace plotMerge
             TaskInfo ti = (TaskInfo)stateInfo;
             if (ti.x % 2 == 0)
                 {
-                    if (!halt) halt = halt || !ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop1, Math.Min(ti.src.nonces - ti.z, ti.limit));
-                    if (!halt) halt = halt || !ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop2, Math.Min(ti.src.nonces - ti.z, ti.limit));
+                    if (!halt) halt = halt || !ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop1, Math.Min(ti.src.nonces * ti.boostmulti - ti.z, ti.limit));
+                    if (!halt) halt = halt || !ti.writer.WriteScoop(4095 - ti.y - (ti.boostmulti - 1), ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop2, Math.Min(ti.src.nonces * ti.boostmulti - ti.z, ti.limit));
                 }
                 else
                 {
-                    if (!halt) halt = halt || !ti.writer.WriteScoop(4095 - ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop4, Math.Min(ti.src.nonces - ti.z, ti.limit));
-                    if (!halt) halt = halt || !ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop3, Math.Min(ti.src.nonces - ti.z, ti.limit)); 
+                    if (!halt) halt = halt || !ti.writer.WriteScoop(4095 - ti.y - (ti.boostmulti - 1), ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop4, Math.Min(ti.src.nonces * ti.boostmulti - ti.z, ti.limit));
+                    if (!halt) halt = halt || !ti.writer.WriteScoop(ti.y, ti.tar.nonces, ti.z + (long)(ti.src.start - ti.tar.start), ti.scoop3, Math.Min(ti.src.nonces * ti.boostmulti - ti.z, ti.limit)); 
                 }
             if (ti.x != (ti.end - 1))
             {
@@ -320,6 +334,7 @@ namespace plotMerge
             public int z;
             public int x;
             public int limit;
+            public int boostmulti;
             public Plotfile src;
             public Plotfile tar;
             public Scoop scoop1;
@@ -377,14 +392,18 @@ namespace plotMerge
         }
 
         //Convert Poc1>Poc2 and vice versa
-        private static void Poc1poc2shuffle(Scoop scoop1, Scoop scoop2, int limit)
+        private static void Poc1poc2shuffleBoost(Scoop scoop1, Scoop scoop2, int nonces, int limit)
         {
             byte[] buffer = new byte[32];
-            for (int i = 0; i < limit; i++)
+            int partition = limit / nonces;
+            for (int p = 0; p < partition; p++)
             {
-                Buffer.BlockCopy(scoop1.byteArrayField, 64 * i + 32, buffer, 0, 32);
-                Buffer.BlockCopy(scoop2.byteArrayField, 64 * i + 32, scoop1.byteArrayField, 64 * i + 32, 32);
-                Buffer.BlockCopy(buffer, 0, scoop2.byteArrayField, 64 * i + 32, 32);
+                for (int i = 0; i < nonces; i++)
+                {
+                    Buffer.BlockCopy(scoop1.byteArrayField, p * nonces * 64 + 64 * i + 32, buffer, 0, 32);
+                    Buffer.BlockCopy(scoop2.byteArrayField, (partition - p - 1) * nonces * 64 + 64 * i + 32, scoop1.byteArrayField, p * nonces * 64 + 64 * i + 32, 32);
+                    Buffer.BlockCopy(buffer, 0, scoop2.byteArrayField, (partition - p - 1) * nonces * 64 + 64 * i + 32, 32);
+                }
             }
         }
 
